@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "us-west-2"
+  region = "eu-west-2"
 }
 
 resource "aws_vpc" "Primary_VPC" {
@@ -7,7 +7,7 @@ resource "aws_vpc" "Primary_VPC" {
 }
 
 resource "aws_subnet" "subnet_with_64_addresses" {
-  vpc_id     = aws_vpc.main.id
+  vpc_id     = aws_vpc.Primary_VPC.id
   cidr_block = "10.0.0.0/26"
 }
 
@@ -36,14 +36,10 @@ resource "aws_instance" "DC1" {
   subnet_id = aws_subnet.subnet_with_64_addresses.id
 
   security_groups = [
-    aws_security_group.allow_ssh.name,
+    aws_security_group.allow_ssh.id,
   ]
 
   tags = {
     Name = "DC1"
   }
-}
-
-output "instance_public_ip" {
-  value = aws_instance.example.public_ip
 }
