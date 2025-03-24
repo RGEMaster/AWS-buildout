@@ -1,3 +1,6 @@
+
+
+#Where are we doing this
 provider "aws" {
   region = "eu-west-2"
 }
@@ -7,12 +10,12 @@ resource "aws_vpc" "TF_AI_VPC" {
 }
 
 resource "aws_subnet" "TF_AI_Subnet" {
-  vpc_id     = aws_vpc.Primary_VPC.id
+  vpc_id     = aws_vpc.TF_AI_VPC
   cidr_block = "172.16.0.0/12"
 }
 
 resource "aws_security_group" "allow_ssh" {
-  vpc_id = aws_vpc.Primary_VPC.id
+  vpc_id = aws_vpc.TF_AI_VPC
 
   ingress {
     from_port   = 22
