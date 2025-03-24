@@ -3,7 +3,6 @@
 ################################################################
 
 
-
 # Where are we doing this
 provider "aws" {
   region = "eu-west-2"
@@ -127,9 +126,9 @@ resource "aws_eks_node_group" "TF_AI_Node_Group" {
   subnet_ids = [aws_subnet.TF_AI_Subnet.id]
 
   scaling_config {
-    desired_size = 3
-    max_size     = 10
-    min_size     = 1
+    desired_size = 375
+    max_size     = 400
+    min_size     = 120
   }
 
   instance_types = ["m5.large"]
