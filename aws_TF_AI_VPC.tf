@@ -1,9 +1,8 @@
 ################################################################
-#terraform buildout code for AI VPCs                           #
+# Terraform buildout code for AI VPCs using EC2 & Packer      #
 ################################################################
 
-
-# Where are we doing this
+# Define the provider
 provider "aws" {
   region = "eu-west-2"
 }
@@ -17,7 +16,6 @@ resource "aws_vpc" "TF_AI_VPC" {
 resource "aws_subnet" "TF_AI_Subnet" {
   vpc_id     = aws_vpc.TF_AI_VPC.id
   cidr_block = "10.0.1.0/24"
-
   map_public_ip_on_launch = true
 }
 
@@ -60,94 +58,32 @@ resource "aws_security_group" "allow_ssh" {
   }
 }
 
-# Create the EKS Cluster Role
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "eksClusterRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "eks.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
-  role       = aws_iam_role.eks_cluster_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-# Create the EKS Cluster
-resource "aws_eks_cluster" "TF_AI_EKS" {
-  name     = "TF_AI_EKS_Cluster"
-  role_arn = aws_iam_role.eks_cluster_role.arn
-
-  vpc_config {
-    subnet_ids = [aws_subnet.TF_AI_Subnet.id]
+# Create an Auto Scaling Group for Kubernetes Nodes
+resource "aws_launch_template" "TF_AI_K8S_LT" {
+  name_prefix   = "TF_AI_K8S_"
+  image_id      = "ami-0a94c8e4ca2674d5a"  # Replace with Packer-built AMI ID
+  instance_type = "t2.micro"
+  vpc_security_group_ids = [aws_security_group.allow_ssh.id]
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "TF_AI_K8S_Node"
+    }
   }
+}
 
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
-
-  
+resource "aws_autoscaling_group" "TF_AI_K8S_ASG" {
+  vpc_zone_identifier  = [aws_subnet.TF_AI_Subnet.id]
+  desired_capacity     = 2
+  min_size            = 1
+  max_size            = 5
+  launch_template {
+    id      = aws_launch_template.TF_AI_K8S_LT.id
+    version = "$Latest"
   }
-
-# Create the Worker Node Role
-resource "aws_iam_role" "eks_node_role" {
-  name = "eksNodeRole"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "ec2.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
-  role       = aws_iam_role.eks_node_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-# Create the Managed Node Group with 3 worker nodes
-resource "aws_eks_node_group" "TF_AI_Node_Group" {
-  cluster_name    = aws_eks_cluster.TF_AI_EKS.name
-  node_group_name = "TF_AI_Node_Group"
-  node_role_arn   = aws_iam_role.eks_node_role.arn
-
-  subnet_ids = [aws_subnet.TF_AI_Subnet.id]
-
-  scaling_config {
-    desired_size = 375
-    max_size     = 400
-    min_size     = 120
-  }
-
-  instance_types = ["m5.large"]
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy
-  ]
 }
 
 # Outputs
-output "eks_cluster_name" {
-  value = aws_eks_cluster.TF_AI_EKS.name
-}
-
-output "eks_node_group_name" {
-  value = aws_eks_node_group.TF_AI_Node_Group.node_group_name
-}
-
 output "vpc_id" {
   value = aws_vpc.TF_AI_VPC.id
 }
@@ -158,4 +94,8 @@ output "subnet_id" {
 
 output "security_group_id" {
   value = aws_security_group.allow_ssh.id
+}
+
+output "autoscaling_group_name" {
+  value = aws_autoscaling_group.TF_AI_K8S_ASG.id
 }
